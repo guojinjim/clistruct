@@ -85,3 +85,27 @@ func typeName(v interface{}) string {
 func getStructFieldTag(field reflect.StructField, name string) string {
 	return strings.TrimSpace(field.Tag.Get(name))
 }
+
+func getStructFieldTagSlice(field reflect.StructField, name string) []string {
+	tagValue := strings.TrimSpace(field.Tag.Get(name))
+	if tagValue == "" {
+		return nil
+	}
+
+	if strings.HasPrefix(tagValue, "[") && strings.HasSuffix(tagValue, "]"){
+		tagValue = tagValue[1:len(tagValue)-1]
+		return cleanTagValues(strings.Split(tagValue, ","))
+	} else {
+		return []string{tagValue}
+	}
+}
+
+func cleanTagValues(values []string) []string {
+	res := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.Trim(v, "'")
+		v = strings.TrimLeft(v, "'")
+		res = append(res, v)
+	}
+	return res
+}

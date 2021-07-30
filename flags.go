@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -14,6 +14,7 @@ const (
 	typeTag  = "type"
 	usageTag = "usage"
 	valueTag = "value"
+	aliasTag = "alias"
 )
 
 const (
@@ -68,24 +69,22 @@ type valueGetter func(*cli.Context, string) interface{}
 
 var (
 	typeTagToFlag = map[string]cli.Flag{
-		boolTypeTag:        *new(cli.BoolFlag),
-		boolTTypeTag:       *new(cli.BoolTFlag),
-		uintTypeTag:        *new(cli.UintFlag),
-		uint64TypeTag:      *new(cli.Uint64Flag),
-		intTypeTag:         *new(cli.IntFlag),
-		int64TypeTag:       *new(cli.Int64Flag),
-		float64TypeTag:     *new(cli.Float64Flag),
-		intSliceTypeTag:    *new(cli.IntSliceFlag),
-		int64SliceTypeTag:  *new(cli.Int64SliceFlag),
-		stringTypeTag:      *new(cli.StringFlag),
-		stringSliceTypeTag: *new(cli.StringSliceFlag),
-		durationTypeTag:    *new(cli.DurationFlag),
-		genericTypeTag:     *new(cli.GenericFlag),
+		boolTypeTag:        new(cli.BoolFlag),
+		uintTypeTag:        new(cli.UintFlag),
+		uint64TypeTag:      new(cli.Uint64Flag),
+		intTypeTag:         new(cli.IntFlag),
+		int64TypeTag:       new(cli.Int64Flag),
+		float64TypeTag:     new(cli.Float64Flag),
+		intSliceTypeTag:    new(cli.IntSliceFlag),
+		int64SliceTypeTag:  new(cli.Int64SliceFlag),
+		stringTypeTag:      new(cli.StringFlag),
+		stringSliceTypeTag: new(cli.StringSliceFlag),
+		durationTypeTag:    new(cli.DurationFlag),
+		genericTypeTag:     new(cli.GenericFlag),
 	}
 
 	typeTagToFlagValueGetter = map[string]valueGetter{
 		boolTypeTag:        func(ctx *cli.Context, key string) interface{} { return ctx.Bool(key) },
-		boolTTypeTag:       func(ctx *cli.Context, key string) interface{} { return ctx.BoolT(key) },
 		uintTypeTag:        func(ctx *cli.Context, key string) interface{} { return ctx.Uint(key) },
 		uint64TypeTag:      func(ctx *cli.Context, key string) interface{} { return ctx.Uint64(key) },
 		intTypeTag:         func(ctx *cli.Context, key string) interface{} { return ctx.Int(key) },
@@ -158,17 +157,15 @@ var (
 		intSliceValueType: func(v string) (interface{}, error) {
 			var (
 				ints     = strings.Split(v, listDelimiter)
-				intSlice = make(cli.IntSlice, len(ints))
-				i        int64
+				intSlice = cli.IntSlice{}
 				err      error
 			)
 
-			for k, v := range ints {
-				i, err = strconv.ParseInt(v, 10, 32)
+			for _, v := range ints {
+				err = intSlice.Set(v)
 				if err != nil {
 					return nil, err
 				}
-				intSlice[k] = int(i)
 			}
 
 			return &intSlice, nil
@@ -176,17 +173,15 @@ var (
 		int64SliceValueType: func(v string) (interface{}, error) {
 			var (
 				ints       = strings.Split(v, listDelimiter)
-				int64Slice = make(cli.Int64Slice, len(ints))
-				i          int64
+				int64Slice = cli.Int64Slice{}
 				err        error
 			)
 
-			for k, v := range ints {
-				i, err = strconv.ParseInt(v, 10, 64)
+			for _, v := range ints {
+				err = int64Slice.Set(v)
 				if err != nil {
 					return nil, err
 				}
-				int64Slice[k] = i
 			}
 
 			return &int64Slice, nil
@@ -195,7 +190,19 @@ var (
 			return v, nil
 		},
 		stringSliceValueType: func(v string) (interface{}, error) {
-			stringSlice := cli.StringSlice(strings.Split(v, listDelimiter))
+			var (
+				strings     = strings.Split(v, listDelimiter)
+				stringSlice = cli.StringSlice{}
+				err         error
+			)
+
+			for _, v := range strings {
+				err = stringSlice.Set(v)
+				if err != nil {
+					return nil, err
+				}
+			}
+
 			return &stringSlice, nil
 		},
 		durationValueType: func(v string) (interface{}, error) {
@@ -245,11 +252,7 @@ func flagsFromStruct(v interface{}) ([]cli.Flag, error) {
 			return nil, err
 		}
 
-		flags = append(
-			flags,
-			indirectValue(reflect.ValueOf(flag)).
-				Interface().(cli.Flag),
-		)
+		flags = append(flags, flag)
 	}
 
 	return flags, nil
@@ -354,6 +357,16 @@ func flagFromStructField(field reflect.StructField) (cli.Flag, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	err = setStructField(
+		flag,
+		"Aliases",
+		getStructFieldTagSlice(field, aliasTag),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 
 	valueString := getStructFieldTag(field, valueTag)
 	if valueString != "" && typesWithoutValues[field.Type.String()] {
